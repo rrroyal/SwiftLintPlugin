@@ -1,53 +1,67 @@
 import Foundation
 import PackagePlugin
-import XcodeProjectPlugin
 
 @main
-@available(macOS 13.0, *)
-struct SwiftLintPlugin: BuildToolPlugin, XcodeBuildToolPlugin {
+struct SwiftLintPlugin: BuildToolPlugin {
+    func createBuildCommands(context: PluginContext, target: Target) async throws -> [Command] {
+        guard let sourceTarget = target as? SourceModuleTarget else {
+            return []
+        }
+        return createBuildCommands(
+            inputFiles: sourceTarget.sourceFiles(withSuffix: "swift").map(\.path),
+            packageDirectory: context.package.directory,
+            workingDirectory: context.pluginWorkDirectory,
+            tool: try context.tool(named: "swiftlint")
+        )
+    }
 
-	func createBuildCommands(context: PackagePlugin.PluginContext, target: PackagePlugin.Target) async throws -> [PackagePlugin.Command] {
-		let configPath = "\(context.package.directory.string)/.swiftlint.yml"
-		guard FileManager.default.fileExists(atPath: configPath) else {
-			// swiftlint:disable:next line_length
-			Diagnostics.remark("No SwiftLint configuration found at path \"\(configPath)\". If you would like to use SwiftLint for this target, create a `.swiftlint.yml` file at this path.")
-			return []
-		}
+    private func createBuildCommands(inputFiles: [Path],
+                                     packageDirectory: Path,
+                                     workingDirectory: Path,
+                                     tool: PluginContext.Tool) -> [Command] {
+        if inputFiles.isEmpty {
+            // Don't lint anything if there are no Swift source files in this target
+            return []
+        }
 
-		let command = PackagePlugin.Command.buildCommand(
-			displayName: "Running SwiftLint for \(target.name)",
-			executable: try context.tool(named: "swiftlint").path,
-			arguments: [
-				"lint",
-				"--in-process-sourcekit",
-				"--path", target.directory.string,
-				"--config", configPath
-			],
-			environment: [:]
-		)
-		return [command]
-	}
+        var arguments: [String] = [
+			"lint",
+//            "--quiet",
+			"--cache-path", "\(workingDirectory)",
+        ]
 
-	func createBuildCommands(context: XcodeProjectPlugin.XcodePluginContext, target: XcodeProjectPlugin.XcodeTarget) throws -> [PackagePlugin.Command] {
-		let projectPath = context.xcodeProject.directory
-		let configPath = "\(projectPath)/.swiftlint.yml"
-		guard FileManager.default.fileExists(atPath: configPath) else {
-			// swiftlint:disable:next line_length
-			Diagnostics.remark("No SwiftLint configuration found at path \"\(configPath)\". If you would like to use SwiftLint for this target (\(target.displayName)), create a `.swiftlint.yml` file at this path.")
-			return []
-		}
+        // Manually look for configuration files, to avoid issues when the plugin does not execute our tool from the
+        // package source directory.
+        if let configuration = packageDirectory.firstConfigurationFileInParentDirectories() {
+            arguments.append(contentsOf: ["--config", "\(configuration.string)"])
+        }
+        arguments += inputFiles.map(\.string)
 
-		let command = PackagePlugin.Command.buildCommand(
-			displayName: "Running SwiftLint for \(target.displayName)",
-			executable: try context.tool(named: "swiftlint").path,
-			arguments: [
-				"lint",
-				"--in-process-sourcekit",
-				"--path", projectPath,
-				"--config", configPath
-			],
-			environment: [:]
-		)
-		return [command]
-	}
+        return [
+            .buildCommand(
+                displayName: "SwiftLint",
+                executable: tool.path,
+                arguments: arguments
+            )
+        ]
+    }
 }
+
+#if canImport(XcodeProjectPlugin)
+import XcodeProjectPlugin
+
+extension SwiftLintPlugin: XcodeBuildToolPlugin {
+    func createBuildCommands(context: XcodePluginContext, target: XcodeTarget) throws -> [Command] {
+        let inputFilePaths = target.inputFiles
+            .filter { $0.type == .source && $0.path.extension == "swift" }
+            .map(\.path)
+
+        return createBuildCommands(
+            inputFiles: inputFilePaths,
+            packageDirectory: context.xcodeProject.directory,
+            workingDirectory: context.pluginWorkDirectory,
+            tool: try context.tool(named: "swiftlint")
+        )
+    }
+}
+#endif
