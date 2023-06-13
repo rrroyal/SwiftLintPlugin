@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
 	name: "SwiftLintPlugin",
 	products: [
-		.plugin(name: "SwiftLint", targets: ["SwiftLint"]),
+		.plugin(name: "SwiftLintPlugin", targets: ["SwiftLint"]),
 		// .plugin(name: "SwiftLintFixPlugin", targets: ["Fix with SwiftLint"])
 	],
 	dependencies: [],
@@ -23,7 +23,7 @@ let package = Package(
 		// 	path: "Plugins/SwiftLintFix"),
 		.binaryTarget(
 			name: "SwiftLintBinary",
-			url: "https://github.com/realm/SwiftLint/releases/download/0.50.3/SwiftLintBinary-macos.artifactbundle.zip",
-			checksum: "abe7c0bb505d26c232b565c3b1b4a01a8d1a38d86846e788c4d02f0b1042a904")
+			url: "https://github.com/realm/SwiftLint/releases/download/0.52.2/SwiftLintBinary-macos.artifactbundle.zip",
+			checksum: "89651e1c87fb62faf076ef785a5b1af7f43570b2b74c6773526e0d5114e0578e")
 	]
 )
